@@ -20,9 +20,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.roamoralesgonzalez.aura.ui.theme.AURATheme
 import androidx.compose.animation.core.*
+import com.roamoralesgonzalez.aura.service.SensorDataManager
+import com.roamoralesgonzalez.aura.service.SensorMonitoringService
 import com.roamoralesgonzalez.aura.services.FloatingBubbleService
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class MainActivity : ComponentActivity() {
+    private val _magneticStrength = MutableStateFlow(0f)
+    val magneticStrength: StateFlow<Float> = _magneticStrength
+
     private val overlayPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -40,7 +47,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen()
+                    MainScreen(
+                        onStartMonitoring = { startMonitoring() },
+                        onStopMonitoring = { stopMonitoring() }
+                    )
                 }
             }
         }
@@ -62,13 +72,43 @@ class MainActivity : ComponentActivity() {
         val serviceIntent = Intent(this, FloatingBubbleService::class.java)
         startService(serviceIntent)
     }
+
+    private fun startMonitoring() {
+        val serviceIntent = Intent(this, SensorMonitoringService::class.java)
+        startService(serviceIntent)
+    }
+
+    private fun stopMonitoring() {
+        val serviceIntent = Intent(this, SensorMonitoringService::class.java)
+        stopService(serviceIntent)
+    }
 }
 
 @Composable
-fun MainScreen(modifier: Modifier = Modifier) {
+fun MainScreen(
+    modifier: Modifier = Modifier,
+    onStartMonitoring: () -> Unit = {},
+    onStopMonitoring: () -> Unit = {}
+) {
     var isMonitoring by remember { mutableStateOf(false) }
     var magneticStrength by remember { mutableStateOf(0f) }
     var warningLevel by remember { mutableStateOf(0) }
+
+    // Observar los cambios del magnetómetro
+    LaunchedEffect(Unit) {
+        SensorDataManager.magneticStrength.collect { strength ->
+            magneticStrength = strength
+        }
+    }
+
+    // Actualizar el nivel de advertencia basado en la intensidad
+    LaunchedEffect(magneticStrength) {
+        warningLevel = when {
+            magneticStrength > 500f -> 2  // Nivel peligroso
+            magneticStrength > 200f -> 1  // Nivel de precaución
+            else -> 0                     // Nivel seguro
+        }
+    }
 
     Column(
         modifier = modifier
@@ -129,7 +169,14 @@ fun MainScreen(modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             Button(
-                onClick = { isMonitoring = !isMonitoring },
+                onClick = {
+                    isMonitoring = !isMonitoring
+                    if (isMonitoring) {
+                        onStartMonitoring()
+                    } else {
+                        onStopMonitoring()
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isMonitoring) Color.Red else Color.Green
                 )
