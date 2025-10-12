@@ -25,6 +25,11 @@ import com.roamoralesgonzalez.aura.service.SensorMonitoringService
 import com.roamoralesgonzalez.aura.services.FloatingBubbleService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import com.roamoralesgonzalez.aura.ui.screens.SettingsScreen
 
 class MainActivity : ComponentActivity() {
     private val _magneticStrength = MutableStateFlow(0f)
@@ -43,15 +48,10 @@ class MainActivity : ComponentActivity() {
         checkOverlayPermission()
         setContent {
             AURATheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainScreen(
-                        onStartMonitoring = { startMonitoring() },
-                        onStopMonitoring = { stopMonitoring() }
-                    )
-                }
+                MainContent(
+                    onStartMonitoring = { startMonitoring() },
+                    onStopMonitoring = { stopMonitoring() }
+                )
             }
         }
     }
@@ -85,10 +85,32 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+private fun MainContent(
+    onStartMonitoring: () -> Unit,
+    onStopMonitoring: () -> Unit
+) {
+    var currentScreen by remember { mutableStateOf("main") }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (currentScreen) {
+            "main" -> MainScreen(
+                onStartMonitoring = onStartMonitoring,
+                onStopMonitoring = onStopMonitoring,
+                onSettingsClick = { currentScreen = "settings" }
+            )
+            "settings" -> SettingsScreen(
+                onNavigateBack = { currentScreen = "main" }
+            )
+        }
+    }
+}
+
+@Composable
 fun MainScreen(
     modifier: Modifier = Modifier,
     onStartMonitoring: () -> Unit = {},
-    onStopMonitoring: () -> Unit = {}
+    onStopMonitoring: () -> Unit = {},
+    onSettingsClick: () -> Unit = {}
 ) {
     var isMonitoring by remember { mutableStateOf(false) }
     var magneticStrength by remember { mutableStateOf(0f) }
@@ -104,8 +126,8 @@ fun MainScreen(
     // Actualizar el nivel de advertencia basado en la intensidad
     LaunchedEffect(magneticStrength) {
         warningLevel = when {
-            magneticStrength > 500f -> 2  // Nivel peligroso
-            magneticStrength > 200f -> 1  // Nivel de precaución
+            magneticStrength > 200f -> 2  // Nivel peligroso
+            magneticStrength > 50f -> 1  // Nivel de precaución
             else -> 0                     // Nivel seguro
         }
     }
@@ -184,10 +206,11 @@ fun MainScreen(
                 Text(if (isMonitoring) "Detener" else "Iniciar")
             }
 
-            Button(
-                onClick = { /* Implementar configuración */ }
-            ) {
-                Text("Configuración")
+            IconButton(onClick = onSettingsClick) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Configuración"
+                )
             }
         }
     }
