@@ -1,7 +1,10 @@
 package com.roamoralesgonzalez.aura
 
+import android.bluetooth.BluetoothAdapter
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -286,20 +289,34 @@ fun MagneticFieldIndicator(
     }
 }
 
+fun desactivarWifi(context: Context) {
+    val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    wifiManager.isWifiEnabled = false
+}
+
+fun desactivarBluetooth() {
+    val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    bluetoothAdapter?.disable()
+}
+fun abrirConfiguracionModoAvion(context: Context) {
+    val intent = Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS)
+    context.startActivity(intent)
+}
+
 fun enviarAlerta(nivel: Int) {
     println("Alerta nivel $nivel activada")
     // Aquí puedes usar NotificationManager para mostrar una notificación real
 }
 
-fun aplicarAcciones(config: ConfiguracionAlerta) {
+fun aplicarAcciones(context: Context, config: ConfiguracionAlerta) {
     if (config.desactivarWifi) {
-        // Desactivar Wi-Fi con WifiManager
+        desactivarWifi(context)
     }
     if (config.desactivarBluetooth) {
-        // Desactivar Bluetooth con BluetoothAdapter
+        desactivarBluetooth()
     }
     if (config.activarModoAvion) {
-        // Activar modo avión (requiere permisos especiales)
+        abrirConfiguracionModoAvion(context)
     }
 }
 @Preview(showBackground = true)
