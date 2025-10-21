@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import com.roamoralesgonzalez.aura.ui.screens.SettingsScreen
+import com.roamoralesgonzalez.aura.model.ConfiguracionAlerta
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     private val _magneticStrength = MutableStateFlow(0f)
@@ -115,6 +117,8 @@ fun MainScreen(
     var isMonitoring by remember { mutableStateOf(false) }
     var magneticStrength by remember { mutableStateOf(0f) }
     var warningLevel by remember { mutableStateOf(0) }
+    val config = remember { mutableStateOf(ConfiguracionAlerta()) }
+
 
     // Observar los cambios del magnetómetro
     LaunchedEffect(Unit) {
@@ -131,7 +135,36 @@ fun MainScreen(
             else -> 0                     // Nivel seguro
         }
     }
+    var tiempoContacto by remember { mutableStateOf(0L) }
+    var alertaNivel by remember { mutableStateOf(0) }
 
+    LaunchedEffect(isMonitoring, warningLevel) {
+        if (isMonitoring && warningLevel > 0) {
+            while (isMonitoring && warningLevel > 0) {
+                delay(1000L)
+                tiempoContacto += 1000L
+
+                when {
+                    tiempoContacto >= config.value.tiempoNivel3 && alertaNivel < 3 -> {
+                        alertaNivel = 3
+                        enviarAlerta(3)
+                        aplicarAcciones(config.value)
+                    }
+                    tiempoContacto >= config.value.tiempoNivel2 && alertaNivel < 2 -> {
+                        alertaNivel = 2
+                        enviarAlerta(2)
+                    }
+                    tiempoContacto >= config.value.tiempoNivel1 && alertaNivel < 1 -> {
+                        alertaNivel = 1
+                        enviarAlerta(1)
+                    }
+                }
+            }
+        } else {
+            tiempoContacto = 0L
+            alertaNivel = 0
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -214,6 +247,8 @@ fun MainScreen(
             }
         }
     }
+
+
 }
 
 @Composable
@@ -260,6 +295,22 @@ fun MagneticFieldIndicator(
     }
 }
 
+fun enviarAlerta(nivel: Int) {
+    println("Alerta nivel $nivel activada")
+    // Aquí puedes usar NotificationManager para mostrar una notificación real
+}
+
+fun aplicarAcciones(config: ConfiguracionAlerta) {
+    if (config.desactivarWifi) {
+        // Desactivar Wi-Fi con WifiManager
+    }
+    if (config.desactivarBluetooth) {
+        // Desactivar Bluetooth con BluetoothAdapter
+    }
+    if (config.activarModoAvion) {
+        // Activar modo avión (requiere permisos especiales)
+    }
+}
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
