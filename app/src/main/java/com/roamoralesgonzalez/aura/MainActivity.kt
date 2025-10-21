@@ -30,6 +30,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import com.roamoralesgonzalez.aura.ui.screens.SettingsScreen
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.layout.Arrangement.spacedBy
+import androidx.compose.foundation.layout.Arrangement.Center
 
 class MainActivity : ComponentActivity() {
     private val _magneticStrength = MutableStateFlow(0f)
@@ -105,6 +108,7 @@ private fun MainContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     modifier: Modifier = Modifier,
@@ -132,85 +136,100 @@ fun MainScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        // Título
-        Text(
-            text = "AURA",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        // Indicador visual
-        MagneticFieldIndicator(
-            strength = magneticStrength,
-            warningLevel = warningLevel,
-            modifier = Modifier
-                .size(200.dp)
-                .padding(16.dp)
-        )
-
-        // Estado actual
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Estado del sensor:",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = if (isMonitoring) "Monitorizando" else "Detenido",
-                    color = if (isMonitoring) Color.Green else Color.Red
-                )
-                Text(
-                    text = "Intensidad: %.2f µT".format(magneticStrength),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "Nivel de advertencia: $warningLevel",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-
-        // Controles
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(
-                onClick = {
-                    isMonitoring = !isMonitoring
-                    if (isMonitoring) {
-                        onStartMonitoring()
-                    } else {
-                        onStopMonitoring()
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "AURA",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontFamily = FontFamily.Serif
+                        ),
+                        color = Color.White
+                    )
+                },
+                actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Configuración",
+                            tint = Color.White
+                        )
                     }
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isMonitoring) Color.Red else Color.Green
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF201B43)
                 )
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // Indicador visual
+            MagneticFieldIndicator(
+                strength = magneticStrength,
+                warningLevel = warningLevel,
+                modifier = Modifier
+                    .size(300.dp)  // Tamaño reducido del círculo
+                    .padding(top = 32.dp)  // Espacio adicional arriba
+            )
+
+            // Estado actual
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)  // Ajuste del padding vertical
             ) {
-                Text(if (isMonitoring) "Detener" else "Iniciar")
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Estado del sensor:",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = if (isMonitoring) "Monitorizando" else "Detenido",
+                        color = if (isMonitoring) Color.Green else Color.Red
+                    )
+                    Text(
+                        text = "Intensidad: %.2f µT".format(magneticStrength),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Nivel de advertencia: $warningLevel",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
-            IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "Configuración"
-                )
+            // Botón centrado
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .padding(bottom = 32.dp),  // Espacio adicional abajo
+                contentAlignment = Alignment.Center
+            ) {
+                Button(
+                    onClick = {
+                        isMonitoring = !isMonitoring
+                        if (isMonitoring) {
+                            onStartMonitoring()
+                        } else {
+                            onStopMonitoring()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isMonitoring) Color.Red else Color.Green
+                    )
+                ) {
+                    Text(if (isMonitoring) "Detener" else "Iniciar")
+                }
             }
         }
     }
