@@ -1,7 +1,10 @@
 package com.roamoralesgonzalez.aura
 
+import android.bluetooth.BluetoothAdapter
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -34,6 +37,7 @@ import com.roamoralesgonzalez.aura.model.ConfiguracionAlerta
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.layout.Arrangement.spacedBy
 import androidx.compose.foundation.layout.Arrangement.Center
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     private val _magneticStrength = MutableStateFlow(0f)
@@ -117,10 +121,15 @@ fun MainScreen(
     onStopMonitoring: () -> Unit = {},
     onSettingsClick: () -> Unit = {}
 ) {
+
+    val context = LocalContext.current
     var isMonitoring by remember { mutableStateOf(false) }
     var magneticStrength by remember { mutableStateOf(0f) }
     var warningLevel by remember { mutableStateOf(0) }
     val config = remember { mutableStateOf(ConfiguracionAlerta()) }
+    var mostrarDialogoWifi by remember { mutableStateOf(false) }
+    var mostrarDialogoBluetooth by remember { mutableStateOf(false) }
+    var mostrarDialogoModoAvion by remember { mutableStateOf(false) }
 
 
     // Observar los cambios del magnetómetro
@@ -238,7 +247,41 @@ fun MainScreen(
             }
         }
     }
+    if (mostrarDialogoWifi) {
+        ConfirmacionDialogo(
+            titulo = "Desactivar Wi-Fi",
+            mensaje = "¿Deseas desactivar el Wi-Fi?",
+            onConfirmar = {
+                mostrarDialogoWifi = false
+                abrirConfiguracionWifi(context)
+            },
+            onCancelar = { mostrarDialogoWifi = false }
+        )
+    }
 
+    if (mostrarDialogoBluetooth) {
+        ConfirmacionDialogo(
+            titulo = "Desactivar Bluetooth",
+            mensaje = "¿Deseas desactivar el Bluetooth?",
+            onConfirmar = {
+                mostrarDialogoBluetooth = false
+                desactivarBluetooth()
+            },
+            onCancelar = { mostrarDialogoBluetooth = false }
+        )
+    }
+
+    if (mostrarDialogoModoAvion) {
+        ConfirmacionDialogo(
+            titulo = "Activar modo avión",
+            mensaje = "¿Deseas activar el modo avión?",
+            onConfirmar = {
+                mostrarDialogoModoAvion = false
+                abrirConfiguracionModoAvion(context)
+            },
+            onCancelar = { mostrarDialogoModoAvion = false }
+        )
+    }
 
 }
 
@@ -286,26 +329,81 @@ fun MagneticFieldIndicator(
     }
 }
 
+fun desactivarWifi(context: Context) {
+    val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    wifiManager.isWifiEnabled = false
+}
+
+fun desactivarBluetooth() {
+    val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    bluetoothAdapter?.disable()
+}
+fun abrirConfiguracionModoAvion(context: Context) {
+    val intent = Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS)
+    context.startActivity(intent)
+}
+fun abrirConfiguracionWifi(context: Context) {
+    val intent = Intent(Settings.ACTION_WIFI_SETTINGS)
+    context.startActivity(intent)
+}
 fun enviarAlerta(nivel: Int) {
     println("Alerta nivel $nivel activada")
     // Aquí puedes usar NotificationManager para mostrar una notificación real
 }
-
-fun aplicarAcciones(config: ConfiguracionAlerta) {
+//API 28 e inferior
+fun aplicarAcciones(context: Context, config: ConfiguracionAlerta) {
     if (config.desactivarWifi) {
-        // Desactivar Wi-Fi con WifiManager
+        desactivarWifi(context)
     }
     if (config.desactivarBluetooth) {
-        // Desactivar Bluetooth con BluetoothAdapter
+        desactivarBluetooth()
     }
     if (config.activarModoAvion) {
-        // Activar modo avión (requiere permisos especiales)
+        abrirConfiguracionModoAvion(context)
     }
 }
+//API 29 y superiores
+@Composable
+fun ConfirmacionDialogo(
+    titulo: String,
+    mensaje: String,
+    onConfirmar: () -> Unit,
+    onCancelar: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancelar,
+        title = { Text(titulo) },
+        text = { Text(mensaje) },
+        confirmButton = {
+            TextButton(onClick = onConfirmar) {
+                Text("Aceptar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancelar) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+fun aplicarAccionesConDialogos(
+    config: ConfiguracionAlerta,
+    mostrarWifi: () -> Unit,
+    mostrarBluetooth: () -> Unit,
+    mostrarModoAvion: () -> Unit
+) {
+    if (config.desactivarWifi) mostrarWifi()
+    if (config.desactivarBluetooth) mostrarBluetooth()
+    if (config.activarModoAvion) mostrarModoAvion()
+}
+
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
     AURATheme {
         MainScreen()
+
     }
+
 }
