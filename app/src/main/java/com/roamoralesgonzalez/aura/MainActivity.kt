@@ -266,7 +266,7 @@ fun MagneticFieldIndicator(
         )
 
         // Dibujar indicador de intensidad
-        val sweepAngle = (animatedStrength / 100f) * 360f
+        val sweepAngle = (animatedStrength / 200f) * 360f
         drawArc(
             color = when (warningLevel) {
                 0 -> Color.Green
