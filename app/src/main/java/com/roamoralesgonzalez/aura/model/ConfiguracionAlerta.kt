@@ -8,5 +8,8 @@ data class ConfiguracionAlerta(
     val tiempoNivel3: Long = 60_000L, // 60 segundos
     val desactivarWifi: Boolean = false,
     val desactivarBluetooth: Boolean = false,
-    val activarModoAvion: Boolean = false
+    val activarModoAvion: Boolean = false,
+    val umbralNivel1: Float = 50f, // Límite para el nivel de precaución (amarillo)
+    val umbralNivel2: Float = 200f, // Límite para el nivel de peligro (rojo)
+    val mostrarBurbujaFlotante: Boolean = true
 )

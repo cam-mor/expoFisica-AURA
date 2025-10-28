@@ -16,7 +16,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Arrangement.Center
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,10 +62,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
-        checkOverlayPermission()
         setContent {
             AURATheme {
                 MainContent(
+                    activity = this,
                     onStartMonitoring = { startMonitoring() },
                     onStopMonitoring = { stopMonitoring() }
                 )
@@ -89,7 +88,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkOverlayPermission() {
+    fun checkOverlayPermission() {
         if (!Settings.canDrawOverlays(this)) {
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -101,9 +100,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startFloatingBubble() {
+    fun startFloatingBubble() {
         val serviceIntent = Intent(this, FloatingBubbleService::class.java)
         startService(serviceIntent)
+    }
+
+    fun stopFloatingBubble() {
+        val serviceIntent = Intent(this, FloatingBubbleService::class.java)
+        stopService(serviceIntent)
     }
 
     private fun startMonitoring() {
@@ -119,19 +123,32 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun MainContent(
+    activity: MainActivity,
     onStartMonitoring: () -> Unit,
     onStopMonitoring: () -> Unit
 ) {
     var currentScreen by remember { mutableStateOf("main") }
+    var config by remember { mutableStateOf(ConfiguracionAlerta()) }
+
+    LaunchedEffect(config.mostrarBurbujaFlotante) {
+        if (config.mostrarBurbujaFlotante) {
+            activity.checkOverlayPermission()
+        } else {
+            activity.stopFloatingBubble()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         when (currentScreen) {
             "main" -> MainScreen(
+                config = config,
                 onStartMonitoring = onStartMonitoring,
                 onStopMonitoring = onStopMonitoring,
                 onSettingsClick = { currentScreen = "settings" }
             )
             "settings" -> SettingsScreen(
+                config = config,
+                onConfigChange = { newConfig -> config = newConfig },
                 onNavigateBack = { currentScreen = "main" }
             )
         }
@@ -142,6 +159,7 @@ private fun MainContent(
 @Composable
 fun MainScreen(
     modifier: Modifier = Modifier,
+    config: ConfiguracionAlerta,
     onStartMonitoring: () -> Unit = {},
     onStopMonitoring: () -> Unit = {},
     onSettingsClick: () -> Unit = {}
@@ -151,13 +169,11 @@ fun MainScreen(
     var isMonitoring by remember { mutableStateOf(false) }
     var magneticStrength by remember { mutableStateOf(0f) }
     var warningLevel by remember { mutableStateOf(0) }
-    val config = remember { mutableStateOf(ConfiguracionAlerta()) }
     var mostrarDialogoWifi by remember { mutableStateOf(false) }
     var mostrarDialogoBluetooth by remember { mutableStateOf(false) }
     var mostrarDialogoModoAvion by remember { mutableStateOf(false) }
     var highRiskTimestamp by remember { mutableStateOf<Long?>(null) }
     var alertsFired by remember { mutableStateOf(emptySet<Long>()) }
-
 
     // Observar los cambios del magnetómetro
     LaunchedEffect(Unit) {
@@ -167,16 +183,16 @@ fun MainScreen(
     }
 
     // Actualizar el nivel de advertencia basado en la intensidad
-    LaunchedEffect(magneticStrength) {
+    LaunchedEffect(magneticStrength, config) {
         warningLevel = when {
-            magneticStrength > 200f -> 2  // Nivel peligroso
-            magneticStrength > 50f -> 1  // Nivel de precaución
+            magneticStrength > config.umbralNivel2 -> 2  // Nivel peligroso
+            magneticStrength > config.umbralNivel1 -> 1  // Nivel de precaución
             else -> 0                     // Nivel seguro
         }
     }
 
     // Lógica para enviar una alerta cuando se está en nivel de peligro por 10, 30 y 60 segundos.
-    LaunchedEffect(warningLevel) {
+    LaunchedEffect(warningLevel, config) {
         if (warningLevel == 2) {
             if (highRiskTimestamp == null) {
                 highRiskTimestamp = System.currentTimeMillis()
@@ -186,9 +202,9 @@ fun MainScreen(
                 if (highRiskTimestamp != null) {
                     val elapsedTime = System.currentTimeMillis() - highRiskTimestamp!!
                     val alertTimes = listOf(
-                        config.value.tiempoNivel1,
-                        config.value.tiempoNivel2,
-                        config.value.tiempoNivel3
+                        config.tiempoNivel1,
+                        config.tiempoNivel2,
+                        config.tiempoNivel3
                     )
 
                     alertTimes.forEach { alertTime ->
@@ -243,6 +259,7 @@ fun MainScreen(
             MagneticFieldIndicator(
                 strength = magneticStrength,
                 warningLevel = warningLevel,
+                config = config,
                 modifier = Modifier
                     .size(300.dp)  // Tamaño reducido del círculo
                     .padding(top = 32.dp)  // Espacio adicional arriba
@@ -344,6 +361,7 @@ fun MainScreen(
 fun MagneticFieldIndicator(
     strength: Float,
     warningLevel: Int,
+    config: ConfiguracionAlerta,
     modifier: Modifier = Modifier
 ) {
     val animatedStrength by animateFloatAsState(
@@ -364,7 +382,8 @@ fun MagneticFieldIndicator(
         )
 
         // Dibujar indicador de intensidad
-        val sweepAngle = (animatedStrength / 200f) * 360f
+        val maxStrength = if (config.umbralNivel2 > 0) config.umbralNivel2 else 200f
+        val sweepAngle = (animatedStrength / maxStrength) * 360f
         drawArc(
             color = when (warningLevel) {
                 0 -> Color.Green
@@ -413,8 +432,6 @@ fun enviarAlerta(context: Context, nivel: Int, durationInMillis: Long) {
         .setContentTitle("¡Alerta de Campo Magnético!")
         .setContentText("Nivel de campo magnético alto detectado por más de $durationInSeconds segundos.")
         .setPriority(NotificationCompat.PRIORITY_HIGH)
-    // Se ha eliminado setAutoCancel(true) para diagnosticar por qué la notificación desaparece.
-    // Si la notificación ahora persiste, significa que algo estaba simulando un clic en ella.
 
     with(NotificationManagerCompat.from(context)) {
         // TODO: For API 33+, you need to request the POST_NOTIFICATIONS permission.
@@ -477,8 +494,6 @@ fun aplicarAccionesConDialogos(
 @Composable
 fun MainScreenPreview() {
     AURATheme {
-        MainScreen()
-
+        MainScreen(config = ConfiguracionAlerta())
     }
-
 }
