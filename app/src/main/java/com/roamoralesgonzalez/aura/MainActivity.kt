@@ -1,43 +1,52 @@
 package com.roamoralesgonzalez.aura
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Arrangement.Center
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.roamoralesgonzalez.aura.ui.theme.AURATheme
-import androidx.compose.animation.core.*
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.roamoralesgonzalez.aura.model.ConfiguracionAlerta
 import com.roamoralesgonzalez.aura.service.SensorDataManager
 import com.roamoralesgonzalez.aura.service.SensorMonitoringService
 import com.roamoralesgonzalez.aura.services.FloatingBubbleService
+import com.roamoralesgonzalez.aura.ui.screens.SettingsScreen
+import com.roamoralesgonzalez.aura.ui.theme.AURATheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import com.roamoralesgonzalez.aura.ui.screens.SettingsScreen
-import com.roamoralesgonzalez.aura.model.ConfiguracionAlerta
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.foundation.layout.Arrangement.spacedBy
-import androidx.compose.foundation.layout.Arrangement.Center
-import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     private val _magneticStrength = MutableStateFlow(0f)
@@ -45,7 +54,7 @@ class MainActivity : ComponentActivity() {
 
     private val overlayPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    ) { _ ->
         if (Settings.canDrawOverlays(this)) {
             startFloatingBubble()
         }
@@ -53,6 +62,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createNotificationChannel()
         checkOverlayPermission()
         setContent {
             AURATheme {
@@ -61,6 +71,21 @@ class MainActivity : ComponentActivity() {
                     onStopMonitoring = { stopMonitoring() }
                 )
             }
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelId = "magnetic_field_alert_channel"
+            val name = "Alertas de Campo Magnético"
+            val descriptionText = "Notificaciones para niveles altos de campo magnético"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(channelId, name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
@@ -130,6 +155,8 @@ fun MainScreen(
     var mostrarDialogoWifi by remember { mutableStateOf(false) }
     var mostrarDialogoBluetooth by remember { mutableStateOf(false) }
     var mostrarDialogoModoAvion by remember { mutableStateOf(false) }
+    var highRiskTimestamp by remember { mutableStateOf<Long?>(null) }
+    var alertsFired by remember { mutableStateOf(emptySet<Long>()) }
 
 
     // Observar los cambios del magnetómetro
@@ -147,8 +174,36 @@ fun MainScreen(
             else -> 0                     // Nivel seguro
         }
     }
-    var tiempoContacto by remember { mutableStateOf(0L) }
-    var alertaNivel by remember { mutableStateOf(0) }
+
+    // Lógica para enviar una alerta cuando se está en nivel de peligro por 10, 30 y 60 segundos.
+    LaunchedEffect(warningLevel) {
+        if (warningLevel == 2) {
+            if (highRiskTimestamp == null) {
+                highRiskTimestamp = System.currentTimeMillis()
+            }
+            while (true) { // Se cancelará cuando warningLevel cambie
+                delay(1000) // Revisar cada segundo
+                if (highRiskTimestamp != null) {
+                    val elapsedTime = System.currentTimeMillis() - highRiskTimestamp!!
+                    val alertTimes = listOf(
+                        config.value.tiempoNivel1,
+                        config.value.tiempoNivel2,
+                        config.value.tiempoNivel3
+                    )
+
+                    alertTimes.forEach { alertTime ->
+                        if (elapsedTime >= alertTime && !alertsFired.contains(alertTime)) {
+                            enviarAlerta(context, 2, alertTime)
+                            alertsFired = alertsFired + alertTime
+                        }
+                    }
+                }
+            }
+        } else {
+            highRiskTimestamp = null // Resetear si no estamos en la zona de alto riesgo
+            alertsFired = emptySet() // Resetear las alertas disparadas
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -346,11 +401,31 @@ fun abrirConfiguracionWifi(context: Context) {
     val intent = Intent(Settings.ACTION_WIFI_SETTINGS)
     context.startActivity(intent)
 }
-fun enviarAlerta(nivel: Int) {
-    println("Alerta nivel $nivel activada")
-    // Aquí puedes usar NotificationManager para mostrar una notificación real
+
+fun enviarAlerta(context: Context, nivel: Int, durationInMillis: Long) {
+    // Usamos la duración como ID para que cada alerta (10s, 30s, 60s) sea una notificación distinta
+    val notificationId = durationInMillis.toInt()
+    val channelId = "magnetic_field_alert_channel"
+    val durationInSeconds = durationInMillis / 1000
+
+    val builder = NotificationCompat.Builder(context, channelId)
+        .setSmallIcon(android.R.drawable.ic_dialog_alert)
+        .setContentTitle("¡Alerta de Campo Magnético!")
+        .setContentText("Nivel de campo magnético alto detectado por más de $durationInSeconds segundos.")
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+    // Se ha eliminado setAutoCancel(true) para diagnosticar por qué la notificación desaparece.
+    // Si la notificación ahora persiste, significa que algo estaba simulando un clic en ella.
+
+    with(NotificationManagerCompat.from(context)) {
+        // TODO: For API 33+, you need to request the POST_NOTIFICATIONS permission.
+        notify(notificationId, builder.build())
+    }
+    println("Alerta nivel $nivel ($durationInSeconds s) activada con notificación")
 }
+
+
 //API 28 e inferior
+
 fun aplicarAcciones(context: Context, config: ConfiguracionAlerta) {
     if (config.desactivarWifi) {
         desactivarWifi(context)
