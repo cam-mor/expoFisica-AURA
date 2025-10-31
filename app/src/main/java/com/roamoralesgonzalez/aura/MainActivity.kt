@@ -1,15 +1,18 @@
 package com.roamoralesgonzalez.aura
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +40,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.roamoralesgonzalez.aura.model.ConfiguracionAlerta
 import com.roamoralesgonzalez.aura.service.SensorDataManager
 import com.roamoralesgonzalez.aura.service.SensorMonitoringService
@@ -51,6 +55,17 @@ class MainActivity : ComponentActivity() {
     private val _magneticStrength = MutableStateFlow(0f)
     val magneticStrength: StateFlow<Float> = _magneticStrength
 
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Log.d("MainActivity", "Notification permission granted.")
+        } else {
+            Log.d("MainActivity", "Notification permission denied.")
+            // Optionally, show a rationale to the user.
+        }
+    }
+
     private val overlayPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { _ ->
@@ -62,6 +77,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+        solicitarPermisoNotificaciones()
         setContent {
             AURATheme {
                 MainContent(
@@ -69,6 +85,28 @@ class MainActivity : ComponentActivity() {
                     onStartMonitoring = { startMonitoring() },
                     onStopMonitoring = { stopMonitoring() }
                 )
+            }
+        }
+    }
+
+    private fun solicitarPermisoNotificaciones() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Permission is already granted.
+                }
+                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) -> {
+                    // Explain to the user why you need the permission.
+                    // You could show a dialog here before requesting again.
+                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                else -> {
+                    // Directly ask for the permission.
+                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
             }
         }
     }
@@ -422,7 +460,14 @@ fun abrirConfiguracionWifi(context: Context) {
 }
 
 fun enviarAlerta(context: Context, nivel: Int, durationInMillis: Long) {
-    // Usamos la duración como ID para que cada alerta (10s, 30s, 60s) sea una notificación distinta
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            // Si no tenemos permiso, simplemente no hacemos nada (o podríamos registrar un log).
+            Log.d("enviarAlerta", "Permission to post notifications not granted.")
+            return
+        }
+    }
+
     val notificationId = durationInMillis.toInt()
     val channelId = "magnetic_field_alert_channel"
     val durationInSeconds = durationInMillis / 1000
@@ -434,7 +479,6 @@ fun enviarAlerta(context: Context, nivel: Int, durationInMillis: Long) {
         .setPriority(NotificationCompat.PRIORITY_HIGH)
 
     with(NotificationManagerCompat.from(context)) {
-        // TODO: For API 33+, you need to request the POST_NOTIFICATIONS permission.
         notify(notificationId, builder.build())
     }
     println("Alerta nivel $nivel ($durationInSeconds s) activada con notificación")

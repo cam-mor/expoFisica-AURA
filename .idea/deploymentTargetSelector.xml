@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="AURA.app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-10-28T07:36:06.591996700Z">
+        <DropdownSelection timestamp="2025-10-31T15:02:14.689374100Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\camh0\.android\avd\Medium_Phone.avd" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=4109c84c" />
             </handle>
           </Target>
         </DropdownSelection>
